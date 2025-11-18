@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "goit-pythonweb-hw-08"
+version = "0.1.0"
+description = ""
+authors = ["Maryna997 <mzujkova2002@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pydantic = {extras = ["email"], version = "^2.9.2"}
+sqlalchemy = "^2.0.36"
+fastapi = {extras = ["standard"], version = "^0.115.5"}
+psycopg2-binary = "^2.9.10"
+alembic = "^1.14.0"
+requests = "^2.32.3"
+fastapi-limiter = "^0.1.6"
+passlib = "^1.7.4"
+cloudinary = "^1.41.0"
+fastapi-mail = "^1.4.2"
+pycryptodome = "^3.21.0"
+mako = "^1.2.0"
+python-jose = "^3.3.0"
+aioredis = "^2.0.1"
+slowapi = "^0.1.9"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
