@@ -1,4 +1,4 @@
-## GOIT Python Web Homework 10
+## GOIT Python Web Homework 12
 
 ### Requirements
 
@@ -8,11 +8,11 @@
 ### Installation
 
 ```shell
-git clone https://github.com/Maryna997/goit-pythonweb-hw-10.git
+git clone https://github.com/Maryna997/goit-pythonweb-hw-012.git
 ```
 
 ```shell
-cd goit-pythonweb-hw-10
+cd goit-pythonweb-hw-012
 ```
 
 ### Running the Application
