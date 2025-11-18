@@ -1,17 +1,12 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import EmailStr
 
-from clients.fast_api_mail_client import FastApiMailClient
-from repositories.user_repository import UserRepository
+from api.instances import auth_service
 from schemas.auth import Token
 from schemas.users import UserCreate, UserOut
-from services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-user_repository = UserRepository()
-email_client = FastApiMailClient()
-auth_service = AuthService(user_repository=user_repository, email_sender=email_client)
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -28,3 +23,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 def confirm_email(token: str):
     user = auth_service.confirm_email(token)
     return user
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_200_OK)
+async def request_password_reset(email: EmailStr = Body(..., embed=True)):
+    reset_token = auth_service.create_password_reset_token(email)
+    await auth_service.send_password_reset_email(email, reset_token)
+    return {"message": "Password reset email sent."}
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_200_OK)
+async def confirm_password_reset(token: str, new_password: str):
+    auth_service.reset_password(token, new_password)
+    return {"message": "Password has been reset successfully."}
