@@ -2,19 +2,10 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from clients.fast_api_mail_client import FastApiMailClient
-from repositories.contact_repository import ContactRepository
-from repositories.user_repository import UserRepository
+from api.instances import auth_service, contact_service
 from schemas.contacts import ContactCreate, ContactUpdate, ContactOut
-from services.auth_service import AuthService
-from services.contact_service import ContactService
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
-
-user_repository = UserRepository()
-email_sender = FastApiMailClient()
-auth_service = AuthService(user_repository=user_repository, email_sender=email_sender)
-contact_service = ContactService(ContactRepository())
 
 
 @router.get("/", response_model=List[ContactOut])

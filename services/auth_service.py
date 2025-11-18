@@ -1,3 +1,4 @@
+import json
 import os
 from abc import abstractmethod, ABC
 from datetime import datetime, timedelta
@@ -15,6 +16,8 @@ SECRET_KEY = os.environ.get("AUTH_SECRET_KEY")
 ALGORITHM = os.environ.get("AUTH_JWT_ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("AUTH_ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 CONFIRMATION_TOKEN_EXPIRE_HOURS = int(os.environ.get("AUTH_CONFIRMATION_TOKEN_EXPIRE_HOURS", 24))
+PASSWORD_RESET_TOKEN_EXPIRE_HOURS = int(os.environ.get("PASSWORD_RESET_TOKEN_EXPIRE_HOURS", 1))
+DOMAIN_NAME = os.environ.get("DOMAIN_NAME", "http://localhost:8000")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -44,10 +47,30 @@ class IEmailSender(ABC):
         pass
 
 
+class ICache(ABC):
+    @abstractmethod
+    async def get(self, key: str):
+        pass
+
+    @abstractmethod
+    async def set(self, key: str, value: str, ttl: int):
+        pass
+
+    @abstractmethod
+    async def delete(self, key: str):
+        pass
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
 class AuthService:
-    def __init__(self, user_repository: IUserRepository, email_sender: IEmailSender):
+    def __init__(self, user_repository: IUserRepository, email_sender: IEmailSender, cache: ICache):
         self.user_repository = user_repository
         self.email_client = email_sender
+        self.cache = cache
 
     def hash_password(self, password: str) -> str:
         return pwd_context.hash(password)
@@ -88,7 +111,7 @@ class AuthService:
 
     async def send_confirmation_email(self, user: UserOut, token: str):
         subject = "Confirm your email"
-        confirmation_url = f"https://your-domain.com/auth/confirm/{token}"
+        confirmation_url = f"https://{DOMAIN_NAME}/auth/confirm/{token}"
         body = f"""
         Hello {user.username},
 
@@ -127,7 +150,7 @@ class AuthService:
         access_token = self.create_access_token(data={"sub": user.username})
         return Token(access_token=access_token, token_type="bearer")
 
-    def get_current_user(self, token: str = Depends(oauth2_scheme)):
+    async def get_current_user(self, token: str = Depends(oauth2_scheme)):
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -142,7 +165,52 @@ class AuthService:
         except JWTError:
             raise credentials_exception
 
+        cached_user = await self.cache.get(f"user:{username}")
+        if cached_user:
+            return UserOut(**json.loads(cached_user))
+
         user = self.user_repository.get_by_username(username)
         if user is None:
             raise credentials_exception
-        return user
+
+        user_out = UserOut.from_orm(user)
+
+        user_data = json.dumps(user_out.dict(), cls=CustomJSONEncoder)
+        await self.cache.set(f"user:{username}", user_data, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+
+        return user_out
+
+    def create_password_reset_token(self, email: str) -> str:
+        user = self.user_repository.get_by_email(email)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Email not found")
+        expire = datetime.utcnow() + timedelta(hours=PASSWORD_RESET_TOKEN_EXPIRE_HOURS)
+        payload = {"sub": email, "exp": expire}
+        return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    def reset_password(self, token: str, new_password: str):
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email: str = payload.get("sub")
+            if email is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+            user = self.user_repository.get_by_email(email)
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            hashed_password = self.hash_password(new_password)
+            self.user_repository.update_password(user.id, hashed_password)
+        except JWTError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token")
+
+    async def send_password_reset_email(self, email: str, token: str):
+        reset_url = f"https://{DOMAIN_NAME}/auth/password-reset/confirm?token={token}"
+        subject = "Password Reset Request"
+        body = f"""
+        Hi,
+
+        Click the link below to reset your password:
+        {reset_url}
+
+        If you did not request a password reset, please ignore this email.
+        """
+        await self.email_client.send_email(subject, [email], body)

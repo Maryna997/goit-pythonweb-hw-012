@@ -6,15 +6,12 @@ from jose import jwt
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from clients.cloudinary_client import CloudinaryClient
-from clients.fast_api_mail_client import FastApiMailClient
-from repositories.user_repository import UserRepository
+from api.instances import auth_service, user_service
 from schemas.users import UserOut
-from services.auth_service import AuthService
-from services.user_service import UserService
 
 SECRET_KEY = os.environ.get("AUTH_SECRET_KEY")
 ALGORITHM = os.environ.get("AUTH_JWT_ALGORITHM")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 
 def custom_key_func(request: Request):
@@ -27,15 +24,9 @@ def custom_key_func(request: Request):
         return f"ip-{get_remote_address(request)}"
 
 
-limiter = Limiter(key_func=custom_key_func, storage_uri="redis://redis:6379")
+limiter = Limiter(key_func=custom_key_func, storage_uri=REDIS_URL)
 
 router = APIRouter(prefix="/users", tags=["users"])
-
-user_repository = UserRepository()
-email_client = FastApiMailClient()
-image_client = CloudinaryClient()
-auth_service = AuthService(user_repository=user_repository, email_sender=email_client)
-user_service = UserService(user_repository=user_repository, image_client=image_client)
 
 
 @router.get(

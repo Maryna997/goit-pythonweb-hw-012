@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict
 
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException
 
 from schemas.users import UserOut
 
@@ -35,6 +35,9 @@ class UserService:
         user = self.user_repository.get_by_id(user_id)
         if not user:
             return None
+
+        if user.role != "admin":
+            raise HTTPException(status_code=403, detail="Only admins can change their avatars.")
 
         existing_avatar_url = getattr(user, "avatar_url", None)
         if existing_avatar_url:
