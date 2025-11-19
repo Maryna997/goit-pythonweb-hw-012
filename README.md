@@ -10,6 +10,7 @@
 
 ````shell
 git clone https://github.com/Maryna997/goit-pythonweb-hw-012.git
+```
 
 ```shell
 cd goit-pythonweb-hw-012
